@@ -1,5 +1,6 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+
 from antlr4 import *
 from pddlpy import pddlLexer
 from pddlpy import pddlParser
@@ -347,6 +348,17 @@ class ConstantNumber:
 
     def __eq__(self, other):
         return isinstance(other, ConstantNumber) and self.val == other.val
+    
+class TotalTime:
+    """ represents (total-time)"""
+    def __init__(self):
+        pass
+    
+    def asPDDL(self):
+        return "total-time"
+
+    def __eq__(self, other):
+        return isinstance(other, TotalTime)    
 
 def parseConstantNumber(number):
     return ConstantNumber(float(number.getText()))
@@ -354,17 +366,16 @@ def parseConstantNumber(number):
 
 class FExpression:
     """ represents a functional / numeric expression"""
-    def __init__(self, op, fexp1, fexp2 = None):
+    def __init__(self, op, subexps):
         self.op = op
-        self.fexp1 = fexp1
-        self.fexp2 = fexp2
+        self.subexps = subexps     
 
     def asPDDL(self):
-        if self.op == '-':
-            assert self.fexp2 is None
-            return "(-" + self.fexp1.asPDDL() + ")"
-        else:
-            return "(" + self.op + " " + self.fexp1.asPDDL() + " " + self.fexp2.asPDDL() + ")"
+        #if self.op == '-':
+        #    assert len(self.subexps) == 1
+        #    return "(-" + self.subexps[0].asPDDL() + ")"
+        #else:
+        return "(" + self.op + " " + " ".join(map(lambda x: x.asPDDL(), self.subexps))  + ")"
 
 def parseFExp(fexp):
     if fexp.NUMBER() is not None:
@@ -373,14 +384,32 @@ def parseFExp(fexp):
         return parseFHead(fexp.fHead())
     else:
         op = None
-        fexp1 = parseFExp(fexp.fExp())
-        fexp2 = None
+        fexp1 = parseFExp(fexp.fExp())        
         if fexp.binaryOp() is not None:
             op = fexp.binaryOp().getText()
             fexp2 = parseFExp(fexp.fExp2().fExp())
+            return FExpression(op, [fexp1, fexp2])
         else:
             op = "-"
-        return FExpression(op, fexp1, fexp2)
+            return FExpression(op, [fexp1])
+        return 
+    
+def parseMetricFExp(fexp):
+    if fexp.NUMBER() is not None:
+        return parseConstantNumber(fexp.NUMBER())
+    elif fexp.functionSymbol() is not None:             
+        return FHead(fexp.functionSymbol().name().getText(), TypedArgList(list(map(lambda x: TypedArg(x.NAME().getText()), fexp.name()))))         
+    elif fexp.getText() == 'total-time':
+        return TotalTime()    
+    else:
+        op = None
+        subexps = list(map(parseMetricFExp, fexp.metricFExp()))                    
+        if fexp.binaryOp() is not None:
+            op = fexp.binaryOp().getText()
+        else:
+            assert fexp.getChildCount() > 1
+            op = fexp.getChild(1).getText()
+        return FExpression(op, subexps)    
 
 
 def parseSimpleDurationConstraint(sdc):
@@ -528,20 +557,29 @@ def parseDomain(domain):
         #    derived.append(
         #                   [parseTypeVariableList(action.derivedDef().typedVariableList()), parseGoalDescription(action.derivedDef().goalDesc())]
         #                   )
-    
+
     
     d = Domain(domainname, reqs, types, constants, predicates, functions, actions, durative_actions)
     return d
         
-
+class Metric:
+    """ represents a metric/optimization objective"""
+    def __init__(self, objective, fexp):
+        self.objective = objective
+        self.fexp = fexp
+        
+    def asPDDL(self):
+        return "(:metric " + self.objective + " " + self.fexp.asPDDL() + ")"
+    
 class Problem:
     """ represents a PDDL problem"""
-    def __init__(self, name, domainname, objects, initialstate, goal):
+    def __init__(self, name, domainname, objects, initialstate, goal, metric=None):
         self.name = name
         self.domainname = domainname
         self.objects = objects
         self.initialstate = initialstate
         self.goal = goal
+        self.metric = metric
 
     def asPDDL(self):
         ret = ""
@@ -553,7 +591,8 @@ class Problem:
             ret = ret + "\t\t" + initel.asPDDL() + "\n"
         ret = ret + "\t)\n"
         ret = ret + "\t(:goal " +  self.goal.asPDDL() + ")\n"
-
+        if self.metric is not None:
+            ret = ret + "\t" + self.metric.asPDDL() + "\n"
         ret = ret + ")"
         return ret
         
@@ -573,7 +612,7 @@ def parseInitStateElement(initel):
     elif initel.fHead() is not None:
         fhead = parseFHead(initel.fHead())
         val = parseConstantNumber(initel.NUMBER())
-        return FExpression("=", fhead, val)
+        return FExpression("=", [fhead, val])
     else:
         raise Exception("Don't know how to handle initial element " + initel.getText())
 
@@ -591,29 +630,37 @@ def parseProblem(problem):
         init.append(parseInitStateElement(initel))
 
     goal = parseGoalDescription(problem.goal().goalDesc())
+        
     
+    metric = None
+    if problem.metricSpec() is not None:
+        met = problem.metricSpec()
+        optimization = met.optimization().getText()
+        fexp = parseMetricFExp(met.metricFExp())
+        metric = Metric(optimization, fexp)
+        print(metric.asPDDL())
 
-    return Problem(name, domain, objects, init, goal)
+    return Problem(name, domain, objects, init, goal, metric)
 
+def readAndParseFile(file):
+    inp = FileStream(file)
+    lexer = pddlLexer.pddlLexer(inp)
+    stream = CommonTokenStream(lexer)
+    parser = pddlParser.pddlParser(stream)
+    return parser
 
 def parseDomainAndProblem(domainfile, problemfile):
     print("Parsing domain", domainfile)
-    dinp = FileStream(domainfile)
-    dlexer = pddlLexer.pddlLexer(dinp)
-    dstream = CommonTokenStream(dlexer)
-    dparser = pddlParser.pddlParser(dstream)
-    domain = dparser.domain()
+    dtree = readAndParseFile(domainfile)
+    domain = dtree.domain()
     if domain is not None:
         dom = parseDomain(domain)
     else:
         raise Exception("No domain defined in " + domainfile)
 
     print("Parsing problem", problemfile)
-    pinp = FileStream(problemfile)
-    plexer = pddlLexer.pddlLexer(pinp)
-    pstream = CommonTokenStream(plexer)
-    pparser = pddlParser.pddlParser(pstream)
-    problem = pparser.problem()
+    ptree = readAndParseFile(problemfile)
+    problem = ptree.problem()
     if problem is not None:
         prob = parseProblem(problem)
     else:
@@ -624,7 +671,7 @@ def parseDomainAndProblem(domainfile, problemfile):
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: pddl2.py <domain> <problem>")
+        print("Usage: pddl.py <domain> <problem>")
         return
 
     domainfile = sys.argv[1]
@@ -635,19 +682,19 @@ def main():
 
     print(dom.asPDDL())
     print(prob.asPDDL())
-    for a in dom.actions:
-        for b in [False, True]:
-            print(a.name, "c", b, list(map(lambda x: x.asPDDL(), a.get_pre(b))))
-        for b in [False, True]:
-            print(a.name, "e", b, list(map(lambda x: x.asPDDL(), a.get_eff(b))))
+    #for a in dom.actions:
+    #    for b in [False, True]:
+    #        print(a.name, "c", b, list(map(lambda x: x.asPDDL(), a.get_pre(b))))
+    #    for b in [False, True]:
+    #        print(a.name, "e", b, list(map(lambda x: x.asPDDL(), a.get_eff(b))))
 
-    for da in dom.durative_actions:
-        for t in ["start","all","end"]:
-            for b in [False, True]:
-                print(da.name, "c", t, b, list(map(lambda x: x.asPDDL(), da.get_cond(t, b))))
-        for t in ["start","all","end"]:
-            for b in [False, True]:
-                print(da.name, "e", t, b, list(map(lambda x: x.asPDDL(), da.get_eff(t, b))))
+    #for da in dom.durative_actions:
+    #    for t in ["start","all","end"]:
+    #        for b in [False, True]:
+    #            print(da.name, "c", t, b, list(map(lambda x: x.asPDDL(), da.get_cond(t, b))))
+    #    for t in ["start","all","end"]:
+    #        for b in [False, True]:
+    #            print(da.name, "e", t, b, list(map(lambda x: x.asPDDL(), da.get_eff(t, b))))
 
 
 if __name__ == "__main__":
