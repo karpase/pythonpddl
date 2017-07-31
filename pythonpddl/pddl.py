@@ -119,38 +119,38 @@ def parsePredicate(pred):
 
 class Formula:
     """ represented a goal description (atom / negated atom / and / or)"""
-    def __init__(self, subgoals, op = None):
-        self.subgoals = subgoals
+    def __init__(self, subformulas, op = None):
+        self.subformulas = subformulas
         self.op = op
    
     def get_predicates(self, positive):
         """ returns positive or negative predicates in this goal description"""
         if self.op is None and positive:
-            assert len(self.subgoals) == 1
-            return [self.subgoals[0]]
+            assert len(self.subformulas) == 1
+            return [self.subformulas[0]]
         elif self.op == "not" and not positive:
-            assert len(self.subgoals) == 1
-            return [self.subgoals[0]]
+            assert len(self.subformulas) == 1
+            return [self.subformulas[0]]
         elif self.op == "and":
             l = []
-            for s in self.subgoals:
+            for s in self.subformulas:
                 l = l + s.get_predicates(positive)
             return l
         elif self.op == "or":
-            raise Exception("Don't know how to handle disjunctive condition " + str(self.subgoals))
+            raise Exception("Don't know how to handle disjunctive condition " + str(self.subformulas))
         return []
 
     def asPDDL(self):
         if self.op is None:
-            assert len(self.subgoals) == 1
-            return self.subgoals[0].asPDDL()
+            assert len(self.subformulas) == 1
+            return self.subformulas[0].asPDDL()
         elif self.op == "not":
-            assert len(self.subgoals) == 1
-            return "(not " + self.subgoals[0].asPDDL() + ")"
+            assert len(self.subformulas) == 1
+            return "(not " + self.subformulas[0].asPDDL() + ")"
         elif self.op == "and":
-            return "(" + self.op + " " + " ".join(map(lambda x: x.asPDDL(), self.subgoals)) + ")"
+            return "(" + self.op + " " + " ".join(map(lambda x: x.asPDDL(), self.subformulas)) + ")"
         elif self.op == "or":
-            raise Exception("Don't know how to handle disjunctive condition " + str(self.subgoals))
+            raise Exception("Don't know how to handle disjunctive condition " + str(self.subformulas))
         else:
             raise Exception("Don't know how to handle op " + self.op)
 
@@ -185,15 +185,15 @@ class TimedFormula:
     """ represents a timed goal description"""
     def __init__(self, timespecifier, gd):
         self.timespecifier = timespecifier
-        self.gd = gd
+        self.formula = gd
 
     def asPDDL(self):
         if self.timespecifier == "start":
-            return "(at start " + self.gd.asPDDL() + ")"
+            return "(at start " + self.formula.asPDDL() + ")"
         elif self.timespecifier == "end":
-            return "(at end " + self.gd.asPDDL() + ")"
+            return "(at end " + self.formula.asPDDL() + ")"
         elif self.timespecifier == "all":
-            return "(over all " + self.gd.asPDDL() + ")"
+            return "(over all " + self.formula.asPDDL() + ")"
 
 def parseTimedGoalDescription(timedGD):
     gd = parseGoalDescription(timedGD.goalDesc())
@@ -311,14 +311,14 @@ class DurativeAction:
         l = []
         for x in self.cond:
             if x.timespecifier == timespecifier:
-                l = l + x.gd.get_predicates(positive)
+                l = l + x.formula.get_predicates(positive)
         return l
 
     def get_eff(self, timespecifier, positive):
         l = []
         for x in self.eff:
             if x.timespecifier == timespecifier:
-                l = l + x.gd.get_predicates(positive)
+                l = l + x.formula.get_predicates(positive)
         return l
             
 
@@ -511,7 +511,6 @@ def parseDomain(domain):
     for r in domain.requireDef().REQUIRE_KEY():
         reqs.append(r.getText())
 
-
     # Get types
     if domain.typesDef() is not None:
         types = parseTypeNameList(domain.typesDef().typedNameList())
@@ -524,35 +523,36 @@ def parseDomain(domain):
     else:
         constants = TypedArgList([])
 
+    # Get functions
     functions = []
     if domain.functionsDef() is not None:
         for func in domain.functionsDef().functionList().atomicFunctionSkeleton():
             functions.append(Function(func.functionSymbol().name().getText(), parseTypeVariableList(func.typedVariableList())))
 
+    # Get predicates
     predicates = []
     if domain.predicatesDef() is not None:
         for pred in domain.predicatesDef().atomicFormulaSkeleton():
             predicates.append(Predicate(pred.predicate().name().getText(), parseTypeVariableList(pred.typedVariableList())))
 
+    # Get actions and durative actions
     durative_actions = []
     actions = []
+    #derived = []
     for action in domain.structureDef():
         if action.actionDef() is not None:
             actions.append(parseAction(action.actionDef()))
         elif action.durativeActionDef() is not None:
             durative_actions.append(parseDurativeAction(action.durativeActionDef()))
+        #elif action.derivedDef() is not None:
+        #    derived.append(
+        #                   [parseTypeVariableList(action.derivedDef().typedVariableList()), parseGoalDescription(action.derivedDef().goalDesc())]
+        #                   )
+    
     
     d = Domain(domainname, reqs, types, constants, predicates, functions, actions, durative_actions)
     return d
         
-    
-
-
-
-
-
-
-
 
 class Problem:
     """ represents a PDDL problem"""
@@ -655,19 +655,19 @@ def main():
 
     print(dom.asPDDL())
     print(prob.asPDDL())
-#    for a in dom.actions:
-#        for b in [False, True]:
-#            print(a.name, "c", b, list(map(lambda x: x.asPDDL(), a.get_pre(b))))
-#        for b in [False, True]:
-#            print(a.name, "e", b, list(map(lambda x: x.asPDDL(), a.get_eff(b))))
+    for a in dom.actions:
+        for b in [False, True]:
+            print(a.name, "c", b, list(map(lambda x: x.asPDDL(), a.get_pre(b))))
+        for b in [False, True]:
+            print(a.name, "e", b, list(map(lambda x: x.asPDDL(), a.get_eff(b))))
 
-#    for da in dom.durative_actions:
-#        for t in ["start","all","end"]:
-#            for b in [False, True]:
-#                print(da.name, "c", t, b, list(map(lambda x: x.asPDDL(), da.get_cond(t, b))))
-#        for t in ["start","all","end"]:
-#            for b in [False, True]:
-#                print(da.name, "e", t, b, list(map(lambda x: x.asPDDL(), da.get_eff(t, b))))
+    for da in dom.durative_actions:
+        for t in ["start","all","end"]:
+            for b in [False, True]:
+                print(da.name, "c", t, b, list(map(lambda x: x.asPDDL(), da.get_cond(t, b))))
+        for t in ["start","all","end"]:
+            for b in [False, True]:
+                print(da.name, "e", t, b, list(map(lambda x: x.asPDDL(), da.get_eff(t, b))))
 
 
 if __name__ == "__main__":
