@@ -175,6 +175,8 @@ class TimedFormula:
             return "(at end " + self.formula.asPDDL() + ")"
         elif self.timespecifier == "all":
             return "(over all " + self.formula.asPDDL() + ")"
+        else:            
+            return "(at " + str(self.timespecifier) + " " + self.formula.asPDDL() + ")"
 
 def parseTimedGoalDescription(timedGD):
     gd = parseGoalDescription(timedGD.goalDesc())
@@ -596,19 +598,23 @@ class Problem:
         ret = ret + ")"
         return ret
         
+def parseNameLiteral(nameLiteral):
+    name = nameLiteral.atomicNameFormula().predicate().name().getText()
+    terms = []
+    for t in nameLiteral.atomicNameFormula().name():
+        terms.append(TypedArg(t.NAME().getText()))
+    op = None
+    if nameLiteral.getChildCount() > 1 and nameLiteral.getChild(1).getText() == 'not':
+        op = "not"
+    return Formula([Predicate(name, TypedArgList(terms))], op)
 
+    
 def parseInitStateElement(initel):
-    if initel.nameLiteral() is not None:
-        name = initel.nameLiteral().atomicNameFormula().predicate().name().getText()
-        terms = []
-        for t in initel.nameLiteral().atomicNameFormula().name():
-            terms.append(TypedArg(t.NAME().getText()))
-
-        op = None
-        if initel.getChildCount() > 1:
-            # This hack is meant to take care of negative effects
-            op = initel.getChild(1).getText()       
-        return Formula([Predicate(name, TypedArgList(terms))], op)
+    if initel.getChildCount() > 1 and initel.nameLiteral() and initel.getChild(1).getText() == 'at':
+        time = initel.NUMBER()        
+        return TimedFormula(time, parseNameLiteral(initel.nameLiteral()))
+    elif initel.nameLiteral() is not None: 
+        return parseNameLiteral(initel.nameLiteral())
     elif initel.fHead() is not None:
         fhead = parseFHead(initel.fHead())
         val = parseConstantNumber(initel.NUMBER())
