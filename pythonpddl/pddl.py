@@ -611,7 +611,7 @@ def parseNameLiteral(nameLiteral):
     
 def parseInitStateElement(initel):
     if initel.getChildCount() > 1 and initel.nameLiteral() and initel.getChild(1).getText() == 'at':
-        time = initel.NUMBER()        
+        time = float(initel.NUMBER().getText())       
         return TimedFormula(time, parseNameLiteral(initel.nameLiteral()))
     elif initel.nameLiteral() is not None: 
         return parseNameLiteral(initel.nameLiteral())
