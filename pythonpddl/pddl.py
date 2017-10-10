@@ -675,33 +675,3 @@ def parseDomainAndProblem(domainfile, problemfile):
 
     return (dom, prob)
 
-def main():
-    if len(sys.argv) < 2:
-        print("Usage: pddl.py <domain> <problem>")
-        return
-
-    domainfile = sys.argv[1]
-    problemfile = sys.argv[2]
-
-    (dom,prob) = parseDomainAndProblem(domainfile, problemfile)
-
-
-    print(dom.asPDDL())
-    print(prob.asPDDL())
-    #for a in dom.actions:
-    #    for b in [False, True]:
-    #        print(a.name, "c", b, list(map(lambda x: x.asPDDL(), a.get_pre(b))))
-    #    for b in [False, True]:
-    #        print(a.name, "e", b, list(map(lambda x: x.asPDDL(), a.get_eff(b))))
-
-    #for da in dom.durative_actions:
-    #    for t in ["start","all","end"]:
-    #        for b in [False, True]:
-    #            print(da.name, "c", t, b, list(map(lambda x: x.asPDDL(), da.get_cond(t, b))))
-    #    for t in ["start","all","end"]:
-    #        for b in [False, True]:
-    #            print(da.name, "e", t, b, list(map(lambda x: x.asPDDL(), da.get_eff(t, b))))
-
-
-if __name__ == "__main__":
-    main()
