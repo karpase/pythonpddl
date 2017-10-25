@@ -100,9 +100,11 @@ def parsePredicate(pred):
 
 class Formula:
     """ represented a goal description (atom / negated atom / and / or)"""
-    def __init__(self, subformulas, op = None):
+    def __init__(self, subformulas, op = None, is_effect = False, is_numeric = False):
         self.subformulas = subformulas
         self.op = op
+        self.is_effect = is_effect
+        self.is_numeric = is_numeric
    
     def get_predicates(self, positive):
         """ returns positive or negative predicates in this goal description"""
@@ -128,14 +130,14 @@ class Formula:
         elif self.op == "not":
             assert len(self.subformulas) == 1
             return "(not " + self.subformulas[0].asPDDL() + ")"
-        elif self.op == "and":
+        elif self.op in ["and",'>', '<', '=', '>=', '<=', 'increase', 'decrease', 'assign', 'scale-up', 'scale-down']:
             return "(" + self.op + " " + " ".join(map(lambda x: x.asPDDL(), self.subformulas)) + ")"
         elif self.op == "or":
             raise Exception("Don't know how to handle disjunctive condition " + str(self.subformulas))
         else:
             raise Exception("Don't know how to handle op " + self.op)
 
-def parseGoalDescription(gd):
+def parseGoalDescription(gd, is_effect=False):
     """ parses a goal description. Returns a Formula"""
     if gd.atomicTermFormula() is not None:
         name = gd.atomicTermFormula().predicate().name().getText()
@@ -152,15 +154,18 @@ def parseGoalDescription(gd):
         if gd.getChildCount() > 1:
             # This hack is meant to take care of negative effects
             op = gd.getChild(1).getText()
-        return Formula([Predicate(name, TypedArgList(terms))], op)
+        return Formula([Predicate(name, TypedArgList(terms))], op, is_effect=is_effect)
     elif gd.fComp() is not None:
-        raise Exception("unhandled fcomp condition " + gd.getText())
+        op = gd.fComp().binaryComp().getText()
+        fexp1 = parseFExp(gd.fComp().fExp()[0])
+        fexp2 = parseFExp(gd.fComp().fExp()[1])
+        return Formula([fexp1, fexp2], op, is_effect=is_effect)
     else:
         op = gd.getChild(1).getText()
         preds = []
         for p in gd.goalDesc():
             preds.append(parseGoalDescription(p))
-        return Formula(preds, op)
+        return Formula(preds, op, is_effect=is_effect)
 
 class TimedFormula:
     """ represents a timed goal description"""
@@ -216,7 +221,16 @@ def parseCEffect(ceff):
         raise Exception("Can't handle quantified effect " + ceff.getText())
     else:
         assert ceff.pEffect() is not None
-        return parseGoalDescription(ceff.pEffect())        
+        return parsePEffect(ceff.pEffect())
+
+def parsePEffect(peff):
+    if peff.assignOp() is not None:
+        op = peff.assignOp().getText()
+        head = parseFHead(peff.fHead())
+        exp = parseFExp(peff.fExp())
+        return Formula([head, exp], op, is_effect=True, is_numeric=True)        
+    else:
+        return parseGoalDescription(peff, is_effect=True)        
 
 def parseTimedEffect(timedEffect):
     timespecifier = timedEffect.timeSpecifier().getText()
