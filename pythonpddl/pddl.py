@@ -2,8 +2,8 @@
 # -*- coding: utf-8 -*-
 
 from antlr4 import *
-from pddlpy import pddlLexer
-from pddlpy import pddlParser
+from pythonpddl import pddlLexer
+from pythonpddl import pddlParser
 
 
 import itertools
