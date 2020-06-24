@@ -8,7 +8,7 @@ This assume you have ANTLR4 installed somewhere to generate the parsing files fr
 
 ```
 cd /usr/local/lib
-sudo curl -O http://www.antlr.org/download/antlr-4.7-complete.jar
+sudo curl -O https://www.antlr.org/download/antlr-4.7-complete.jar
 ```
 
 # Installation Instructions
