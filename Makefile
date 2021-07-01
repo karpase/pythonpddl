@@ -1,4 +1,4 @@
-ANTLRLIB=/usr/local/lib/antlr-4.7-complete.jar
+ANTLRLIB=/usr/local/lib/antlr-4.9.2-complete.jar
 ANTLR=java -jar $(ANTLRLIB)
 ANTLRLANG=-Dlanguage=Python3
 
