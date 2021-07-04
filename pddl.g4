@@ -387,8 +387,13 @@ init
 
 initEl
 	: nameLiteral
-	| '(' '=' fHead NUMBER ')'         
+	| fAssignment
 	| '(' 'at' NUMBER nameLiteral ')'
+	| '(' 'at' NUMBER fAssignment ')'
+	;
+
+fAssignment
+	: '(' '=' fHead NUMBER ')'  
 	;
 
 nameLiteral

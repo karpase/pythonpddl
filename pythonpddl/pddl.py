@@ -622,17 +622,24 @@ def parseNameLiteral(nameLiteral):
         op = "not"
     return Formula([Predicate(name, TypedArgList(terms))], op)
 
-    
+def parseFAssignment(fAssignment):
+    fhead = parseFHead(fAssignment.fHead())
+    val = parseConstantNumber(fAssignment.NUMBER())
+    return FExpression("=", [fhead, val])
+
 def parseInitStateElement(initel):
-    if initel.getChildCount() > 1 and initel.nameLiteral() and initel.getChild(1).getText() == 'at':
+    if initel.getChildCount() > 1 and initel.getChild(1).getText() == 'at':
         time = float(initel.NUMBER().getText())       
-        return TimedFormula(time, parseNameLiteral(initel.nameLiteral()))
+        if initel.nameLiteral() is not None:       
+            return TimedFormula(time, parseNameLiteral(initel.nameLiteral()))
+        elif initel.fAssignment() is not None:
+            return TimedFormula(time, parseFAssignment(initel.fAssignment()))
+        else:
+            raise Exception("Don't know how to handle initial element " + initel.getText())
     elif initel.nameLiteral() is not None: 
         return parseNameLiteral(initel.nameLiteral())
-    elif initel.fHead() is not None:
-        fhead = parseFHead(initel.fHead())
-        val = parseConstantNumber(initel.NUMBER())
-        return FExpression("=", [fhead, val])
+    elif initel.fAssignment() is not None:
+        return parseFAssignment(initel.fAssignment())
     else:
         raise Exception("Don't know how to handle initial element " + initel.getText())
 
